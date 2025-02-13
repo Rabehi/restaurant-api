@@ -5,6 +5,12 @@ const pool = require('./app.js')
 
 // Middleware para tratar errores en peticiones
 app.use(express.json())
+const cors = require('cors')
+app.use(cors({
+    origin: 'http://localhost:4321', // frontend
+    methods: ['PUT', 'GET', 'POST', 'DELETE'],
+    allowedHeaders: ['Content-Type']
+}))
 
 // MESAS
 // get all mesas
@@ -24,7 +30,7 @@ app.get('mesas/:id', async (req, res) => {
 app.put('/mesas/:id', async (req, res) => {
     const id = req.params.id
     const { estado } = req.body // Obtiene el nuevo estado de la solicitud
-    const results = await pool.query('UPDATE mesas SET estado = $1, WHERE, id = $2, RETURNING * ', [estado, id])
+    const results = await pool.query('UPDATE mesas SET estado = $1 WHERE id = $2 RETURNING * ', [estado, id])
     res.json(results.rows[0])
 })
 
