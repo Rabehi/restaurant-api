@@ -3,14 +3,63 @@ const express = require('express')
 const app = express()
 const pool = require('./app.js')
 
+const http = require('http')
+const WebSocket = require('ws')
+const server = http.createServer(app)
+const wss = new WebSocket.Server({ server })
+
 // Middleware para tratar errores en peticiones
 app.use(express.json())
 const cors = require('cors')
 app.use(cors({
     origin: 'http://localhost:4321', // frontend
-    methods: ['PUT', 'GET', 'POST', 'DELETE'],
+    methods: ['PUT', 'GET', 'POST', 'DELETE', 'PATCH'],
     allowedHeaders: ['Content-Type']
 }))
+
+// WebSocket: Manejar conexiones
+wss.on('connection', (ws, req) => {
+    console.log('Cliente conectado')
+
+    // Verificar el origen de la conexión
+    const origin = req.headers.origin
+    if (origin !== 'http://localhost:4321') {
+        console.log('Conexión rechazada: origen no permitido')
+        ws.close()
+        return
+    }
+
+    ws.on('message', (message) => {
+        console.log(`Mensaje recibido: ${message}`)
+
+        // Convertir el mensaje a JSON (si no lo está)
+        let jsonMessage
+        try {
+            // Si el mensaje es un Blob, convertirlo a texto
+            if (message instanceof Buffer || message instanceof ArrayBuffer) {
+                const decoder = new TextDecoder('utf-8')
+                jsonMessage = JSON.parse(decoder.decode(message))
+            } else {
+                // Si el mensaje es texto, parsearlo como JSON
+                jsonMessage = JSON.parse(message)
+            }
+        } catch (error) {
+            console.error('Error al parsear el mensaje:', error)
+            return
+        }
+
+        // Enviar el mensaje como JSON a todos los clientes
+        wss.clients.forEach((client) => {
+            if (client !== ws && client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify(jsonMessage))
+            }
+        })
+    })
+
+    ws.on('close', () => {
+        console.log('Cliente desconectado')
+    })
+})
 
 // MESAS
 // get all mesas
@@ -31,6 +80,15 @@ app.put('/mesas/:id', async (req, res) => {
     const id = req.params.id
     const { estado } = req.body // Obtiene el nuevo estado de la solicitud
     const results = await pool.query('UPDATE mesas SET estado = $1 WHERE id = $2 RETURNING * ', [estado, id])
+
+    // Notificar a todos los clientes sobre la actualización
+    wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ type: 'updateMesa', id: parseInt(id), estado }))
+            console.log(`Notificando a los clientes: Mesa ${id} actualizada a estado ${estado}`)
+        }
+    })
+
     res.json(results.rows[0])
 })
 
@@ -133,10 +191,12 @@ app.post('/detalle_comanda', async (req, res) => {
 app.get('/detalle_comanda/no_pagado/:idmesa', async (req, res) => {
     const idmesa = req.params.idmesa
     const results = await pool.query(`
-      SELECT dc.*
-      FROM detalle_comanda dc
-      INNER JOIN comanda c ON c.id = dc.idcomanda
-      WHERE c.pagado = FALSE AND c.idmesa = $1;
+      SELECT dc.*, p.nombre AS producto_nombre
+        FROM detalle_comanda dc
+        INNER JOIN comanda c ON c.id = dc.idcomanda
+        INNER JOIN productos p ON p.id = dc.idproducto
+        WHERE c.pagado = FALSE AND c.idmesa = $1
+        ORDER BY dc.idcomanda ASC;
     `, [idmesa])
     res.json(results.rows)
 })
@@ -149,7 +209,11 @@ app.put('/detalle_comanda/:id', async (req, res) => {
     res.json(results.rows[0])
 })
 
-const PORT = 3000
-app.listen(PORT, () => {
-    console.log(`server runing on port ${PORT}`)
+const PORT_APP = 3000
+app.listen(PORT_APP, () => {
+    console.log(`server runing on port ${PORT_APP}`)
+})
+const PORT_SERVER = 3030
+server.listen(PORT_SERVER, () => {
+    console.log(`WS escuchando en http://localhost:${PORT_SERVER}`)
 })
