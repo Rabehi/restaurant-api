@@ -140,6 +140,15 @@ app.delete('/producto/:id', async (req, res) => {
 app.post('/comanda', async (req, res) => {
     const { idMesa, pagado, fecha, totalpagar } = req.body
     const results = await pool.query('INSERT INTO comanda (idmesa, pagado, fecha, totalpagar) VALUES ($1, $2, $3, $4) RETURNING *', [idMesa, pagado, fecha, totalpagar])
+    // Notificar a todos los clientes sobre la nueva comanda
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({
+                type: 'updateComanda',
+                mesaId: idMesa
+            }))
+        }
+    })
     res.json(results.rows[0])
 })
 
