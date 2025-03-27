@@ -180,6 +180,33 @@ app.put('/comanda/mesa/:idmesa', async (req, res) => {
     res.json(results.rows[0])
 })
 
+// update comanda to pagada by idmesa
+app.put('/comanda/marcar-pagadas/:idmesa', async (req, res) => {
+    const idmesa = req.params.idmesa
+    try {
+        const results = await pool.query(
+            'UPDATE comanda SET pagado = true WHERE idmesa = $1 RETURNING *',
+            [idmesa]
+        )
+        if (results.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'No se encontraron comandas para esta mesa'
+            })
+        }
+        res.json({
+            success: true,
+            comanda: results.rows[0]
+        })
+    } catch (error) {
+        console.error('Error en marcar-pagadas:', error)
+        res.status(500).json({
+            success: false,
+            error: 'Error al marcar comandas como pagadas'
+        })
+    }
+})
+
 // update comanda by idcomanda
 app.put('/comanda/:id', async (req, res) => {
     const id = req.params.id
