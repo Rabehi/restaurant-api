@@ -64,7 +64,8 @@ wss.on('connection', (ws, req) => {
 // MESAS
 // get all mesas
 app.get('/mesas', async (req, res) => {
-    const results = await pool.query('SELECT * FROM mesas')
+    // Ordenar por updated_at descendente (la más reciente primero)
+    const results = await pool.query('SELECT * FROM mesas ORDER BY updated_at DESC')
     res.json(results.rows)
 })
 
