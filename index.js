@@ -246,6 +246,30 @@ app.put('/detalle_comanda/:id', async (req, res) => {
     res.json(results.rows[0])
 })
 
+// get comanda historico by idusuario
+app.get('/comanda/historico/:idusuario', async (req, res) => {
+    const idusuario = req.params.idusuario
+
+    try {
+        const result = await pool.query(`
+            SELECT 
+                c.fecha,
+                p.nombre AS producto,
+                dc.cantidad
+            FROM comanda c
+            INNER JOIN detalle_comanda dc ON c.id = dc.idcomanda
+            INNER JOIN productos p ON p.id = dc.idproducto
+            WHERE c.idusuario = $1
+            ORDER BY c.fecha DESC, c.id;
+        `, [idusuario])
+
+        res.json(result.rows)
+    } catch (err) {
+        console.error('Error al obtener el histórico:', err)
+        res.status(500).json({ error: 'Error al obtener el histórico' })
+    }
+})
+
 // Endpoint para registrar usuarios
 app.post('/api/register', async (req, res) => {
     const { email, password } = req.body
