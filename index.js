@@ -346,6 +346,102 @@ app.get('/api/users', async (req, res) => {
     }
 })
 
+/**
+ * @route POST /api/valoraciones
+ * @desc Crea o actualiza una valoración de producto por usuario
+ */
+app.post('/api/valoraciones', async (req, res) => {
+    const { idusuario, idproducto, puntuacion } = req.body
+
+    // Validar los datos de entrada
+    if (!idusuario || !idproducto || !puntuacion) {
+        return res.status(400).json({ error: 'Faltan campos obligatorios' })
+    }
+
+    if (puntuacion < 1 || puntuacion > 5) {
+        return res.status(400).json({ error: 'La puntuación debe estar entre 1 y 5' })
+    }
+
+    try {
+        // Verificar si el usuario existe
+        const usuarioExists = await pool.query(
+            'SELECT id FROM usuario WHERE id = $1',
+            [idusuario]
+        )
+
+        if (usuarioExists.rows.length === 0) {
+            return res.status(404).json({ error: 'Usuario no encontrado' })
+        }
+
+        // Verificar si el producto existe
+        const productoExists = await pool.query(
+            'SELECT id FROM productos WHERE id = $1',
+            [idproducto]
+        )
+
+        if (productoExists.rows.length === 0) {
+            return res.status(404).json({ error: 'Producto no encontrado' })
+        }
+
+        // Insertar o actualizar la valoración (UPSERT)
+        const result = await pool.query(`
+        INSERT INTO puntuacion (idusuario, idproducto, puntuacion)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (idusuario, idproducto) 
+        DO UPDATE SET puntuacion = EXCLUDED.puntuacion
+        RETURNING *
+      `, [idusuario, idproducto, puntuacion])
+
+        res.status(201).json(result.rows[0])
+    } catch (error) {
+        console.error('Error al guardar la valoración:', error)
+        res.status(500).json({ error: 'Error interno del servidor' })
+    }
+})
+
+/**
+ * @route GET /api/productos/:id/puntuacion-promedio
+ * @desc Obtiene la puntuación promedio de un producto
+ */
+app.get('/api/productos/:id/puntuacion-promedio', async (req, res) => {
+    const { id } = req.params
+
+    try {
+        const result = await pool.query(`
+        SELECT AVG(puntuacion) as promedio, COUNT(*) as total_valoraciones
+        FROM puntuacion
+        WHERE idproducto = $1
+      `, [id])
+
+        res.json({
+            promedio: parseFloat(result.rows[0].promedio) || 0,
+            total_valoraciones: parseInt(result.rows[0].total_valoraciones) || 0
+        })
+    } catch (error) {
+        console.error('Error al obtener puntuación promedio:', error)
+        res.status(500).json({ error: 'Error interno del servidor' })
+    }
+})
+
+/**
+ * @route GET /api/valoraciones/usuario/:idusuario
+ * @desc Obtiene todas las valoraciones de un usuario específico
+ */
+app.get('/api/valoraciones/usuario/:idusuario', async (req, res) => {
+    const { idusuario } = req.params
+
+    try {
+        const result = await pool.query(
+            'SELECT idproducto, puntuacion FROM puntuacion WHERE idusuario = $1',
+            [idusuario]
+        )
+        res.json(result.rows)
+    } catch (error) {
+        console.error('Error al obtener valoraciones:', error)
+        res.status(500).json({ error: 'Error interno del servidor' })
+    }
+})
+
 const PORT_APP = 3000
 app.listen(PORT_APP, () => {
     console.log(`server runing on port ${PORT_APP}`)
