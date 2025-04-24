@@ -139,8 +139,8 @@ app.delete('/producto/:id', async (req, res) => {
 // COMANDAS
 // post comanda
 app.post('/comanda', async (req, res) => {
-    const { idMesa, pagado, fecha, totalpagar } = req.body
-    const results = await pool.query('INSERT INTO comanda (idmesa, pagado, fecha, totalpagar) VALUES ($1, $2, $3, $4) RETURNING *', [idMesa, pagado, fecha, totalpagar])
+    const { idMesa, pagado, fecha, totalpagar, idusuario } = req.body
+    const results = await pool.query('INSERT INTO comanda (idmesa, pagado, fecha, totalpagar, idusuario) VALUES ($1, $2, $3, $4, $5) RETURNING *', [idMesa, pagado, fecha, totalpagar, idusuario])
     // Notificar a todos los clientes sobre la nueva comanda
     wss.clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
@@ -244,6 +244,82 @@ app.put('/detalle_comanda/:id', async (req, res) => {
     const { idcomanda, idproducto, cantidad, precio } = req.body // Obtiene el nuevo estado de la solicitud
     const results = await pool.query('UPDATE detalle_comanda SET idcomanda = $2, idproducto = $3, cantidad = $4, precio = $5 WHERE, id = $1, RETURNING * ', [id, idcomanda, idproducto, cantidad, precio])
     res.json(results.rows[0])
+})
+
+// Endpoint para registrar usuarios
+app.post('/api/register', async (req, res) => {
+    const { email, password } = req.body
+
+    try {
+        // Verificar si el usuario ya existe
+        const userExists = await pool.query(
+            'SELECT * FROM usuario WHERE email = $1',
+            [email]
+        )
+
+        if (userExists.rows.length > 0) {
+            return res.status(400).json({ error: 'El email ya está registrado' })
+        }
+
+        // Insertar nuevo usuario (contraseña en texto plano)
+        const newUser = await pool.query(
+            'INSERT INTO usuario (email, password) VALUES ($1, $2) RETURNING id, email',
+            [email, password] // ¡contraseña sin encriptar!
+        )
+
+        res.status(201).json({
+            message: 'Usuario registrado exitosamente',
+            user: newUser.rows[0]
+        })
+    } catch (error) {
+        console.error('Error en registro:', error)
+        res.status(500).json({ error: 'Error al registrar usuario' })
+    }
+})
+
+// Endpoint para login
+app.post('/api/login', async (req, res) => {
+    const { email, password } = req.body
+
+    try {
+        // Buscar usuario por email
+        const user = await pool.query(
+            'SELECT * FROM usuario WHERE email = $1',
+            [email]
+        )
+
+        if (user.rows.length === 0) {
+            return res.status(401).json({ error: 'Usuario no encontrado' })
+        }
+
+        // Comparar contraseñas directamente (sin encriptar)
+        if (password !== user.rows[0].password) {
+            return res.status(401).json({ error: 'Contraseña incorrecta' })
+        }
+
+        // Responder con éxito (sin token JWT)
+        res.json({
+            message: 'Inicio de sesión exitoso',
+            user: {
+                id: user.rows[0].id,
+                email: user.rows[0].email
+            }
+        })
+    } catch (error) {
+        console.error('Error en login:', error)
+        res.status(500).json({ error: 'Error al iniciar sesión' })
+    }
+})
+
+// Endpoint para obtener todos los usuarios
+app.get('/api/users', async (req, res) => {
+    try {
+        const users = await pool.query('SELECT id, email FROM usuario')
+        res.json(users.rows)
+    } catch (error) {
+        console.error('Error al obtener usuarios:', error)
+        res.status(500).json({ error: 'Error al obtener usuarios' })
+    }
 })
 
 const PORT_APP = 3000
