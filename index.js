@@ -61,12 +61,26 @@ wss.on('connection', (ws, req) => {
     })
 })
 
-// MESAS
-// get all mesas
+/**
+ * @route GET /mesas
+ * @desc Obtiene todas las mesas ordenadas:
+ *       1. Primero las mesas con estado diferente de 0 y 1, ordenadas por updated_at ASC
+ *       2. Luego las mesas con estado 0 o 1, también ordenadas por updated_at ASC
+ */
 app.get('/mesas', async (req, res) => {
-    // Ordenar por updated_at descendente (la más reciente primero)
-    const results = await pool.query('SELECT * FROM mesas ORDER BY updated_at DESC')
-    res.json(results.rows)
+    try {
+        const results = await pool.query(`
+            SELECT * 
+            FROM mesas 
+            ORDER BY 
+                CASE WHEN estado NOT IN (0, 1) THEN 0 ELSE 1 END,  -- Primero las mesas con estado != 0,1
+                updated_at ASC  -- Ambas grupos ordenados por updated_at ASC
+        `)
+        res.json(results.rows)
+    } catch (error) {
+        console.error('Error al obtener mesas:', error)
+        res.status(500).json({ error: 'Error interno del servidor' })
+    }
 })
 
 // get mesa by id
