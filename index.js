@@ -64,8 +64,9 @@ wss.on('connection', (ws, req) => {
 /**
  * @route GET /mesas
  * @desc Obtiene todas las mesas ordenadas:
- *       1. Primero las mesas con estado diferente de 0 y 1, ordenadas por updated_at ASC
- *       2. Luego las mesas con estado 0 o 1, también ordenadas por updated_at ASC
+ *       1. Mesas con estado diferente de 0 y 1 (ordenadas por updated_at ASC)
+ *       2. Mesas con estado 1 (ordenadas por updated_at ASC)
+ *       3. Mesas con estado 0 (ordenadas por updated_at ASC)
  */
 app.get('/mesas', async (req, res) => {
     try {
@@ -73,8 +74,12 @@ app.get('/mesas', async (req, res) => {
             SELECT * 
             FROM mesas 
             ORDER BY 
-                CASE WHEN estado NOT IN (0, 1) THEN 0 ELSE 1 END,  -- Primero las mesas con estado != 0,1
-                updated_at ASC  -- Ambas grupos ordenados por updated_at ASC
+                CASE 
+                    WHEN estado NOT IN (0, 1) THEN 0
+                    WHEN estado = 1 THEN 1
+                    WHEN estado = 0 THEN 2
+                END,
+                updated_at ASC
         `)
         res.json(results.rows)
     } catch (error) {
